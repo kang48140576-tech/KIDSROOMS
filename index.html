@@ -278,11 +278,11 @@
             // --- 텍스처(이미지) 직접 로드 ---
             // HTML 파일과 같은 폴더에 있는 파일명으로 자동 로드합니다.
             const textureLoader = new THREE.TextureLoader();
-            const coverTex = textureLoader.load('표지최종.png');   // 1. 표지 (우측)
-            const centerTex = textureLoader.load('표지최종2.png'); // 2. 내지 (중앙)
-            const leftTex = textureLoader.load('표지최종3.png');   // 3. 좌측 면
+            const coverTex = textureLoader.load('표지1.png');   // 1. 표지 (우측)
+            const centerTex = textureLoader.load('표지2.png'); // 2. 내지 (중앙)
+            const leftTex = textureLoader.load('표지3.png');   // 3. 좌측 면
             
-            const backTex = createSolidTexture('#0b162c'); // 뒷면 딥블루 색상
+            const backTex = createSolidTexture('#fdf7f0'); // 뒷면 색상 (키즈 테마에 맞춘 따뜻한 베이지)
 
             // 브로슈어 크기 설정
             const panelWidth = 2.5;
