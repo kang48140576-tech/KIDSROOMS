@@ -3,396 +3,359 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>그랜드 조선 부산 - 3D 브로슈어 미리보기</title>
+    <title>3D 인터랙티브 브로슈어</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
+            font-family: 'Noto Sans KR', sans-serif;
             margin: 0;
             overflow: hidden;
-            background-color: #f3f4f6;
-            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: #333;
         }
-        #canvas-container {
+
+        /* 3D Scene Setup */
+        #scene {
             width: 100vw;
             height: 100vh;
-            display: block;
+            perspective: 2000px; /* 3D 원근감 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
         }
-        #ui-layer {
+
+        #scene:active {
+            cursor: grabbing;
+        }
+
+        /* Brochure Container */
+        #brochure {
+            position: relative;
+            width: 320px;
+            height: 480px;
+            transform-style: preserve-3d;
+            transform: rotateX(0deg) rotateY(0deg);
+            transition: transform 0.1s linear;
+        }
+
+        /* Panel Common Styles */
+        .panel {
             position: absolute;
-            bottom: 1rem;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .center-panel {
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .left-panel {
+            top: 0;
+            left: -100%;
+            transform-origin: right center; /* 오른쪽 끝을 축으로 접힘 */
+        }
+
+        .right-panel {
+            top: 0;
+            left: 100%;
+            transform-origin: left center; /* 왼쪽 끝을 축으로 접힘 */
+        }
+
+        /* Folded States */
+        /* 안쪽 내용이 바깥을 향하도록 뒤로 120도씩 접혀 삼각형(삼각기둥) 모양을 만듭니다. */
+        .is-folded .right-panel {
+            transform: rotateY(120deg);
+        }
+        
+        .is-folded .left-panel {
+            transform: rotateY(-120deg);
+        }
+
+        /* Brochure Faces (앞면/뒷면) */
+        .face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            background-color: #ffffff;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid rgba(0,0,0,0.05);
+            border-right: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* 안쪽 면 베이지색 적용 */
+        .face.front {
+            background-color: #f5f5dc; 
+        }
+
+        .face.back {
+            transform: rotateY(180deg);
+            background-color: #f8fafc;
+        }
+
+        /* Shadows for realistic depth */
+        .face::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to right, rgba(0,0,0,0.1), transparent, rgba(0,0,0,0.05));
+            pointer-events: none;
+        }
+
+        /* UI Controls */
+        #controls {
+            position: absolute;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 1rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            z-index: 50;
+            display: flex;
+            gap: 15px;
+            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            z-index: 10;
-            width: 90%;
-            max-width: 360px;
+            padding: 15px 25px;
+            border-radius: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 600;
             transition: all 0.3s ease;
         }
-        .slider-container {
-            margin-top: 0.5rem;
+
+        .btn-active {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
         }
-        .slider-container {
-            margin-top: 1rem;
+
+        .btn-inactive {
+            background: rgba(255, 255, 255, 0.8);
+            color: #333;
         }
-        input[type=range] {
-            width: 100%;
-            cursor: pointer;
+
+        .btn-inactive:hover {
+            background: #ffffff;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            #brochure { transform: scale(0.8); }
+        }
+        @media (max-width: 768px) {
+            #brochure { transform: scale(0.6); }
+        }
+        @media (max-width: 480px) {
+            #brochure { transform: scale(0.45); }
         }
     </style>
 </head>
 <body>
 
-    <div id="canvas-container"></div>
+    <!-- UI Controls -->
+    <div id="controls">
+        <button id="btn-unfold" class="btn-active" onclick="setFoldState(false)">펼치기</button>
+        <button id="btn-fold" class="btn-inactive" onclick="setFoldState(true)">접기</button>
+        <button id="btn-auto" class="btn-inactive" onclick="toggleAutoRotate()">자동 회전: 끄기</button>
+    </div>
 
-    <!-- UI 오버레이 -->
-    <div id="ui-layer">
-        <div class="flex justify-between items-center mb-1">
-            <h1 class="text-base font-bold text-gray-800">3D 브로슈어 미리보기</h1>
-            <button id="toggleUiBtn" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded transition">
-                숨기기
-            </button>
-        </div>
-        
-        <div id="ui-content">
-            <p class="text-xs text-gray-500 mb-3">마우스(또는 터치)로 드래그하여 회전할 수 있습니다.</p>
+    <!-- 3D Scene -->
+    <div id="scene">
+        <div id="brochure">
             
-            <div class="slider-container">
-                <label for="foldSlider" class="block text-xs font-medium text-gray-700 mb-1">접기 / 펼치기</label>
-                <input type="range" id="foldSlider" min="0" max="100" value="100" class="accent-blue-900">
+            <!-- 왼쪽 패널 -->
+            <div class="panel left-panel">
+                <!-- 안쪽 면 (펼쳤을 때 가장 왼쪽) -->
+                <div class="face front p-6">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-b-2 border-blue-500 pb-2">우리의 비전</h3>
+                    <p class="text-sm text-slate-600 leading-relaxed mb-4">
+                        미래를 선도하는 혁신적인 기술력으로 세상을 변화시킵니다. 우리는 끊임없는 도전과 열정으로 새로운 가치를 창출합니다.
+                    </p>
+                    <ul class="text-sm text-slate-700 space-y-2 mt-4">
+                        <li class="flex items-center gap-2">✓ 글로벌 네트워크</li>
+                        <li class="flex items-center gap-2">✓ 지속 가능한 성장</li>
+                        <li class="flex items-center gap-2">✓ 고객 중심 서비스</li>
+                    </ul>
+                </div>
+                <!-- 바깥쪽 면 (완전히 접었을 때 '메인 표지'가 됨) -->
+                <div class="face back" style="background-image: url('표지1.png'); background-size: cover; background-position: center; background-color: #ffffff;">
+                </div>
             </div>
+
+            <!-- 중앙 패널 -->
+            <div class="panel center-panel">
+                <!-- 안쪽 면 (펼쳤을 때 중앙) -->
+                <div class="face front p-6">
+                    <img src="https://placehold.co/400x250/2563eb/ffffff?text=Innovation" alt="Main" class="w-full h-40 object-cover rounded-lg mb-6 shadow-md">
+                    <h3 class="text-lg font-bold text-slate-800 mb-2">핵심 서비스 영역</h3>
+                    <p class="text-sm text-slate-600 leading-relaxed mb-4">
+                        인공지능, 클라우드 인프라, 그리고 데이터 보안까지 비즈니스의 성공을 위한 완벽한 솔루션을 제공합니다.
+                    </p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white p-3 rounded shadow-sm text-center text-xs font-bold text-blue-600 border border-slate-100">AI 분석</div>
+                        <div class="bg-white p-3 rounded shadow-sm text-center text-xs font-bold text-blue-600 border border-slate-100">클라우드</div>
+                        <div class="bg-white p-3 rounded shadow-sm text-center text-xs font-bold text-blue-600 border border-slate-100">보안 관제</div>
+                        <div class="bg-white p-3 rounded shadow-sm text-center text-xs font-bold text-blue-600 border border-slate-100">데이터랩</div>
+                    </div>
+                </div>
+                <!-- 바깥쪽 면 (접었을 때 '뒷면 표지'가 됨) -->
+                <div class="face back" style="background-image: url('표지2.png'); background-size: cover; background-position: center; background-color: #ffffff;">
+                </div>
+            </div>
+
+            <!-- 오른쪽 패널 -->
+            <div class="panel right-panel">
+                <!-- 안쪽 면 (펼쳤을 때 가장 오른쪽) -->
+                <div class="face front p-6">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-b-2 border-blue-500 pb-2">프로젝트 성과</h3>
+                    <div class="space-y-4">
+                        <div class="bg-slate-100 p-3 rounded-lg">
+                            <h4 class="text-sm font-bold text-slate-700">A기업 인프라 구축</h4>
+                            <p class="text-xs text-slate-500 mt-1">비용 30% 절감, 효율성 2배 향상</p>
+                        </div>
+                        <div class="bg-slate-100 p-3 rounded-lg">
+                            <h4 class="text-sm font-bold text-slate-700">글로벌 플랫폼 론칭</h4>
+                            <p class="text-xs text-slate-500 mt-1">출시 1년 만에 100만 유저 달성</p>
+                        </div>
+                        <div class="bg-slate-100 p-3 rounded-lg">
+                            <h4 class="text-sm font-bold text-slate-700">스마트 시티 솔루션</h4>
+                            <p class="text-xs text-slate-500 mt-1">도심 교통 트래픽 15% 개선</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- 바깥쪽 면 (접었을 때 안으로 들어가는 플랩 날개) -->
+                <div class="face back" style="background-image: url('표지3.png'); background-size: cover; background-position: center; background-color: #ffffff;">
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <!-- Three.js 및 OrbitControls 로드 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
     <script>
-        // --- 1. 텍스처 생성 (이미지 대신 Canvas를 사용하여 디자인 시뮬레이션) ---
+        const scene = document.getElementById('scene');
+        const brochure = document.getElementById('brochure');
         
-        function drawText(ctx, text, x, y, lineHeight, font, color, align='center') {
-            ctx.font = font;
-            ctx.fillStyle = color;
-            ctx.textAlign = align;
-            const lines = text.split('\n');
-            lines.forEach((line, i) => {
-                ctx.fillText(line, x, y + (i * lineHeight));
-            });
+        // 3D 회전 상태 변수
+        let rotateX = -5;
+        let rotateY = 0;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        // 자동 회전 변수
+        let autoRotate = false;
+        let autoRotateSpeed = 0.3;
+        let animationFrameId;
+
+        // 드래그(마우스 및 터치) 이벤트 리스너 설정
+        scene.addEventListener('mousedown', startDrag);
+        scene.addEventListener('mousemove', drag);
+        window.addEventListener('mouseup', endDrag);
+
+        scene.addEventListener('touchstart', (e) => startDrag(e.touches[0]));
+        scene.addEventListener('touchmove', (e) => drag(e.touches[0]));
+        window.addEventListener('touchend', endDrag);
+
+        function startDrag(e) {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+            if(autoRotate) toggleAutoRotate(); // 드래그 시 자동 회전 중지
         }
 
-        // 표지 (Cover) 텍스처 생성
-        function createCoverTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 1024;
-            const ctx = canvas.getContext('2d');
-
-            // 배경 (네이비)
-            ctx.fillStyle = '#0b162c';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 물결 무늬 장식
-            ctx.beginPath();
-            ctx.moveTo(0, 800);
-            ctx.quadraticCurveTo(256, 750, 512, 850);
-            ctx.lineTo(512, 1024);
-            ctx.lineTo(0, 1024);
-            ctx.fillStyle = '#060d1a';
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.moveTo(0, 800);
-            ctx.quadraticCurveTo(256, 750, 512, 850);
-            ctx.strokeStyle = '#d4af37';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            // 텍스트 (골드 & 화이트)
-            drawText(ctx, "WELCOME GIFT", 256, 150, 40, "30px serif", "#d4af37");
-            drawText(ctx, "GRAND\nJOSUN\nBUSAN", 256, 350, 60, "bold 50px serif", "#d4af37");
-            drawText(ctx, "여행의 시작을 더욱 특별하게,\n그랜드 조선 부산의 웰컴기프트", 256, 600, 40, "24px sans-serif", "#ffffff");
+        function drag(e) {
+            if (!isDragging) return;
             
-            drawText(ctx, "GRAND\nJOSUN ÉCLAT\nBUSAN", 256, 920, 30, "20px serif", "#d4af37");
+            const deltaMove = {
+                x: e.clientX - previousMousePosition.x,
+                y: e.clientY - previousMousePosition.y
+            };
 
-            return new THREE.CanvasTexture(canvas);
+            rotateY += deltaMove.x * 0.5;
+            rotateX -= deltaMove.y * 0.5;
+
+            // X축 회전 제한 (위아래로 너무 많이 뒤집히지 않도록)
+            rotateX = Math.max(-40, Math.min(40, rotateX));
+
+            updateTransform();
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
         }
 
-        // 중앙 패널 (초콜릿 이미지) 텍스처 생성
-        function createCenterTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 1024;
-            const ctx = canvas.getContext('2d');
+        function endDrag() {
+            isDragging = false;
+        }
 
-            // 배경 (베이지)
-            ctx.fillStyle = '#f8f5f0';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function updateTransform() {
+            brochure.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        }
 
-            // 타이틀
-            drawText(ctx, "조선 에끌라,\n부산의 풍경을 담은 특별한 환영", 256, 150, 50, "bold 36px serif", "#0b162c");
-            drawText(ctx, "부산의 바다와 도시에서 영감을 얻은 특별한 웰컴기프트.\n부산의 상징적인 풍경을 담은 디저트로\n그랜드 조선 부산에서의 달콤한 순간을 만나보세요.", 256, 280, 35, "20px sans-serif", "#333333");
+        // 브로슈어 접기/펼치기 제어
+        function setFoldState(fold) {
+            const btnUnfold = document.getElementById('btn-unfold');
+            const btnFold = document.getElementById('btn-fold');
 
-            // 초콜릿 박스 그리기
-            ctx.fillStyle = '#111';
-            ctx.fillRect(50, 450, 412, 450);
-            
-            ctx.fillStyle = '#d4af37';
-            ctx.textAlign = 'center';
-            ctx.font = '24px serif';
-            ctx.fillText("JOSUN ÉCLAT", 256, 500);
-
-            // 6구 초콜릿 슬롯
-            const slotColors = ['#f4d0a4', '#7c4c3a', '#f4d0a4', '#7c4c3a', '#7c4c3a', '#f4d0a4'];
-            let idx = 0;
-            for(let row=0; row<2; row++) {
-                for(let col=0; col<3; col++) {
-                    ctx.fillStyle = '#222';
-                    ctx.fillRect(70 + (col*125), 540 + (row*150), 110, 130);
-                    
-                    // 초콜릿 모양
-                    ctx.fillStyle = slotColors[idx];
-                    ctx.beginPath();
-                    ctx.arc(70 + (col*125) + 55, 540 + (row*150) + 65, 40, 0, Math.PI*2);
-                    ctx.fill();
-                    idx++;
-                }
+            if (fold) {
+                brochure.classList.add('is-folded');
+                btnFold.className = 'btn-active';
+                btnUnfold.className = 'btn-inactive';
+                
+                // 삼각형 입체감이 한눈에 잘 보이도록 앵글 자동 보정
+                rotateX = -15;
+                rotateY = -45;
+            } else {
+                brochure.classList.remove('is-folded');
+                btnUnfold.className = 'btn-active';
+                btnFold.className = 'btn-inactive';
+                
+                // 펼칠 때 3면이 잘 보이도록 앵글 자동 보정
+                rotateX = -5;
+                rotateY = -15; 
             }
-
-            return new THREE.CanvasTexture(canvas);
+            updateTransform();
         }
 
-        // 좌측 패널 (스토리 및 QR) 텍스처 생성
-        function createLeftTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 1024;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = '#f8f5f0';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 내용
-            ctx.textAlign = 'left';
+        // 자동 회전 토글
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            const btnAuto = document.getElementById('btn-auto');
             
-            // 1
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(50, 150, 40, 40); // 아이콘 대용
-            drawText(ctx, "지역의 특별함", 110, 175, 0, "bold 24px sans-serif", "#0b162c", "left");
-            drawText(ctx, "청사포 쌍둥이 등대와 광안대교, 부산 바다의\n풍경을 디저트에 담아 지역의 이야기를 전합니다.", 110, 210, 30, "18px sans-serif", "#555", "left");
-
-            // 2
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(50, 300, 40, 40);
-            drawText(ctx, "프리미엄 디저트 경험", 110, 325, 0, "bold 24px sans-serif", "#0b162c", "left");
-            drawText(ctx, "부산의 상징을 모티브로 한 버터쿠키와\n밀크초콜릿으로 특별한 미식의 순간을 선사합니다.", 110, 360, 30, "18px sans-serif", "#555", "left");
-
-            // 3
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(50, 450, 40, 40);
-            drawText(ctx, "기억에 남는 선물", 110, 475, 0, "bold 24px sans-serif", "#0b162c", "left");
-            drawText(ctx, "그랜드 조선 부산에서의 첫 순간을 더욱 특별하게,\n여행의 기억에 달콤한 여운을 더합니다.", 110, 510, 30, "18px sans-serif", "#555", "left");
-
-            // 하단 QR 영역
-            ctx.fillStyle = '#0b162c';
-            ctx.fillRect(0, 750, 512, 274);
-            
-            // QR 코드 가짜 이미지
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(50, 800, 120, 120);
-            ctx.fillStyle = '#000';
-            ctx.fillRect(60, 810, 40, 40);
-            ctx.fillRect(120, 810, 40, 40);
-            ctx.fillRect(60, 870, 40, 40);
-            ctx.fillRect(120, 870, 40, 40);
-
-            drawText(ctx, "조선 에끌라, 더 자세히 알아보기 >", 200, 830, 0, "18px sans-serif", "#d4af37", "left");
-            drawText(ctx, "QR코드를 스캔하여\n웰컴기프트의 구성과 특별한 이야기를 만나보세요.", 200, 870, 25, "16px sans-serif", "#fff", "left");
-
-            return new THREE.CanvasTexture(canvas);
+            if (autoRotate) {
+                btnAuto.className = 'btn-active';
+                btnAuto.innerText = '자동 회전: 켜짐';
+                loopAutoRotate();
+            } else {
+                btnAuto.className = 'btn-inactive';
+                btnAuto.innerText = '자동 회전: 끄기';
+                cancelAnimationFrame(animationFrameId);
+            }
         }
 
-        // 단색 텍스처 (뒷면용)
-        function createSolidTexture(color) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = color;
-            ctx.fillRect(0, 0, 64, 64);
-            return new THREE.CanvasTexture(canvas);
+        function loopAutoRotate() {
+            if (!autoRotate) return;
+            rotateY += autoRotateSpeed;
+            updateTransform();
+            animationFrameId = requestAnimationFrame(loopAutoRotate);
         }
 
-        // --- 2. Three.js 씬(Scene) 설정 ---
+        // 초기 시작 앵글 설정
+        updateTransform();
         
-        let scene, camera, renderer, controls;
-        let leftHinge, rightHinge; // 접히는 축
-
-        function init() {
-            const container = document.getElementById('canvas-container');
-
-            scene = new THREE.Scene();
-            
-            // 카메라 설정
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 2, 13); // 카메라를 살짝 위로, 뒤로 이동
-
-            // 렌더러 설정
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            // 그림자 활성화
-            renderer.shadowMap.enabled = true;
-            container.appendChild(renderer.domElement);
-
-            // 컨트롤 (마우스 회전)
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.minDistance = 5;
-            controls.maxDistance = 20;
-            controls.target.set(0, 1, 0); // 회전 중심(타겟)을 살짝 위로 올려 패널에 가려지지 않게 함
-
-            // 조명 설정 (밝기 약간 감소)
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // 전체 기본 밝기 조절 (0.9 -> 0.7)
-            scene.add(ambientLight);
-
-            // 앞면 메인 조명
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5); // 메인 조명 밝기 조절 (0.6 -> 0.5)
-            dirLight.position.set(5, 10, 7);
-            dirLight.castShadow = true;
-            scene.add(dirLight);
-
-            // 3면(좌측 패널)을 비춰주는 좌측 뒷면 보조 조명
-            const leftBackLight = new THREE.DirectionalLight(0xffffff, 0.4); // 보조 조명 밝기 조절 (0.5 -> 0.4)
-            leftBackLight.position.set(-10, 5, -10);
-            scene.add(leftBackLight);
-
-            // 표지(우측 패널)를 비춰주는 우측 뒷면 보조 조명
-            const rightBackLight = new THREE.DirectionalLight(0xffffff, 0.4); // 보조 조명 밝기 조절 (0.5 -> 0.4)
-            rightBackLight.position.set(10, 5, -10);
-            scene.add(rightBackLight);
-
-            // --- 텍스처(이미지) 직접 로드 ---
-            const textureLoader = new THREE.TextureLoader();
-            const coverTex = textureLoader.load('표지1.png');   // 1. 표지 (우측)
-            const centerTex = textureLoader.load('표지2.png'); // 2. 내지 (중앙)
-            const leftTex = textureLoader.load('표지3.png');   // 3. 좌측 면
-            
-            const backTex = createSolidTexture('#fdf7f0'); // 뒷면 색상 (키즈 테마에 맞춘 따뜻한 베이지)
-
-            // 브로슈어 크기 설정
-            const panelWidth = 2.5;
-            const panelHeight = 5;
-            const panelThickness = 0.02;
-
-            const geometry = new THREE.BoxGeometry(panelWidth, panelHeight, panelThickness);
-
-            // 머티리얼 배열 (순서: 우, 좌, 상, 하, 앞, 뒤)
-            function getMaterials(frontTex, backTex) {
-                return [
-                    new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-                    new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-                    new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-                    new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-                    new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.8 }),
-                    new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.8 })
-                ];
-            }
-
-            // 전체를 담을 그룹
-            const brochureGroup = new THREE.Group();
-
-            // 1. 중앙 패널 (표지3.png 내용)
-            const centerPanel = new THREE.Mesh(geometry, getMaterials(centerTex, backTex));
-            centerPanel.castShadow = true;
-            brochureGroup.add(centerPanel);
-
-            // 2. 좌측 패널 (부산최종3.png 내용) - 경첩(Hinge)으로 연결
-            leftHinge = new THREE.Group();
-            leftHinge.position.set(-panelWidth / 2, 0, 0); // 중앙 패널의 왼쪽 끝에 축 위치
-            
-            const leftPanel = new THREE.Mesh(geometry, getMaterials(leftTex, backTex));
-            leftPanel.position.set(-panelWidth / 2, 0, 0); // 축을 기준으로 패널 이동
-            leftPanel.castShadow = true;
-            leftHinge.add(leftPanel);
-            brochureGroup.add(leftHinge);
-
-            // 3. 우측 패널 (표지최종.png 내용 - 덮개) - 경첩으로 연결
-            rightHinge = new THREE.Group();
-            rightHinge.position.set(panelWidth / 2, 0, 0); // 중앙 패널의 오른쪽 끝에 축 위치
-
-            const rightPanel = new THREE.Mesh(geometry, getMaterials(coverTex, backTex));
-            rightPanel.position.set(panelWidth / 2, 0, 0);
-            rightPanel.castShadow = true;
-            rightHinge.add(rightPanel);
-            brochureGroup.add(rightHinge);
-
-            // 그룹을 씬에 추가
-            scene.add(brochureGroup);
-
-            // 초기 각도 설정 (삼각형으로 완전히 접힌 상태)
-            updateFold(100);
-
-            // 창 크기 조절 대응
-            window.addEventListener('resize', onWindowResize, false);
-
-            // UI 패널 토글 로직 추가
-            const toggleBtn = document.getElementById('toggleUiBtn');
-            const uiContent = document.getElementById('ui-content');
-            
-            toggleBtn.addEventListener('click', () => {
-                if (uiContent.style.display === 'none') {
-                    uiContent.style.display = 'block';
-                    toggleBtn.innerText = '숨기기';
-                } else {
-                    uiContent.style.display = 'none';
-                    toggleBtn.innerText = '옵션 펼치기';
-                }
-            });
-            
-            // 애니메이션 루프 시작
-            animate();
-        }
-
-        // 슬라이더 조작 시 접기/펴기 각도 업데이트
-        function updateFold(percent) {
-            // percent: 0 (완전 펴짐) ~ 100 (완전 접힘: 삼각형)
-            // 내용물이 바깥으로 나오도록 각 패널을 뒤쪽으로 120도씩 접습니다.
-            
-            const ratio = percent / 100;
-            
-            // 각도를 라디안으로 변환 (-120도, 120도로 회전하여 끝이 맞닿는 정삼각형 구성)
-            const leftAngle = (-120 * ratio) * (Math.PI / 180);
-            const rightAngle = (120 * ratio) * (Math.PI / 180);
-            
-            if(leftHinge && rightHinge) {
-                leftHinge.rotation.y = leftAngle;
-                rightHinge.rotation.y = rightAngle;
-            }
-        }
-
-        // 슬라이더 이벤트 리스너
-        document.getElementById('foldSlider').addEventListener('input', (e) => {
-            updateFold(e.target.value);
-        });
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update(); // OrbitControls 업데이트 (관성 효과)
-            renderer.render(scene, camera);
-        }
-
-        // 스크립트 로드 완료 후 실행
-        window.onload = init;
+        // 페이지 로드 시 약간의 애니메이션 효과로 등장
+        setTimeout(() => {
+            rotateY = -15;
+            updateTransform();
+        }, 500);
 
     </script>
 </body>
